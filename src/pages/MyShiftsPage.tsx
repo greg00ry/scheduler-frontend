@@ -13,7 +13,7 @@ export default function MyShiftsPage() {
   const qc = useQueryClient();
   const { data: allShifts = [] } = useQuery({ queryKey: ['all-shifts'], queryFn: getAllShifts });
   const { data: users = [] } = useQuery({ queryKey: ['users'], queryFn: getAll });
-  const { data: details } = useQuery({ queryKey: ['user-details'], queryFn: getDetails, retry: false });
+  const { data: details } = useQuery({ queryKey: ['user-details'], queryFn: getDetails, retry: false, enabled: !import.meta.env.DEV });
   const [selectedUserId, setSelectedUserId] = useState<number>(0);
 
   useEffect(() => {
