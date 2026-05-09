@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { createAvailability } from '../api/availability';
-import { getAll } from '../api/users';
+import { getAll, getDetails } from '../api/users';
 import type { CreateAvailabilityDTO } from '../types';
 import toast from 'react-hot-toast';
 import { format, addDays, startOfWeek, addWeeks, subWeeks } from 'date-fns';
@@ -13,7 +13,12 @@ interface ModalState { date: Date; available: boolean; startTime: string; endTim
 
 export default function AvailabilityPage() {
   const { data: users = [] } = useQuery({ queryKey: ['users'], queryFn: getAll });
+  const { data: details } = useQuery({ queryKey: ['user-details'], queryFn: getDetails, retry: false });
   const [selectedUserId, setSelectedUserId] = useState<number>(0);
+
+  useEffect(() => {
+    if (details?.id && !selectedUserId) setSelectedUserId(details.id);
+  }, [details]);
   const [currentWeek, setCurrentWeek] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [availability, setAvailability] = useState<Map<string, boolean>>(new Map());
   const [saved, setSaved] = useState<Map<string, DaySaved>>(new Map());

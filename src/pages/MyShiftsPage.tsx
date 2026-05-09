@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getAllShifts } from '../api/schedules';
-import { getAll } from '../api/users';
+import { getAll, getDetails } from '../api/users';
 import { createAbsence } from '../api/absences';
 import type { CreateAbsenceDTO } from '../types';
 import toast from 'react-hot-toast';
@@ -13,7 +13,12 @@ export default function MyShiftsPage() {
   const qc = useQueryClient();
   const { data: allShifts = [] } = useQuery({ queryKey: ['all-shifts'], queryFn: getAllShifts });
   const { data: users = [] } = useQuery({ queryKey: ['users'], queryFn: getAll });
+  const { data: details } = useQuery({ queryKey: ['user-details'], queryFn: getDetails, retry: false });
   const [selectedUserId, setSelectedUserId] = useState<number>(0);
+
+  useEffect(() => {
+    if (details?.id && !selectedUserId) setSelectedUserId(details.id);
+  }, [details]);
   const [modal, setModal] = useState<{ shiftId: number; userId: number; shiftLabel: string } | null>(null);
   const [reason, setReason] = useState('');
 
