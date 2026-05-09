@@ -20,17 +20,17 @@ interface AuthContextValue {
   logout: () => void;
 }
 
+const SKIP_AUTH = import.meta.env.VITE_SKIP_AUTH === 'true';
 const DEV_USER: AuthUser = { email: 'dev@local', role: 'ADMIN' };
-const IS_DEV = import.meta.env.DEV;
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(() => IS_DEV ? null : localStorage.getItem('token'));
-  const [user, setUser] = useState<AuthUser | null>(IS_DEV ? DEV_USER : null);
+  const [token, setToken] = useState<string | null>(() => SKIP_AUTH ? null : localStorage.getItem('token'));
+  const [user, setUser] = useState<AuthUser | null>(SKIP_AUTH ? DEV_USER : null);
 
   useEffect(() => {
-    if (IS_DEV) return;
+    if (SKIP_AUTH) return;
     if (token) {
       try {
         const decoded = jwtDecode<JwtPayload>(token);

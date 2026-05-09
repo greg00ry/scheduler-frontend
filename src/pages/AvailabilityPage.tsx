@@ -13,7 +13,7 @@ interface ModalState { date: Date; available: boolean; startTime: string; endTim
 
 export default function AvailabilityPage() {
   const { data: users = [] } = useQuery({ queryKey: ['users'], queryFn: getAll });
-  const { data: details } = useQuery({ queryKey: ['user-details'], queryFn: getDetails, retry: false, enabled: !import.meta.env.DEV });
+  const { data: details } = useQuery({ queryKey: ['user-details'], queryFn: getDetails, retry: false, enabled: import.meta.env.VITE_SKIP_AUTH !== 'true' });
   const [selectedUserId, setSelectedUserId] = useState<number>(0);
 
   useEffect(() => {

@@ -20,7 +20,7 @@ function StatCard({ label, value, icon: Icon, color }: { label: string; value: s
 }
 
 export default function DashboardPage() {
-  const { data: details } = useQuery({ queryKey: ['user-details'], queryFn: getDetails, retry: false, enabled: !import.meta.env.DEV });
+  const { data: details } = useQuery({ queryKey: ['user-details'], queryFn: getDetails, retry: false, enabled: import.meta.env.VITE_SKIP_AUTH !== 'true' });
   const { data: shifts = [] } = useQuery({ queryKey: ['all-shifts'], queryFn: getAllShifts });
 
   const myShifts = details ? shifts.filter(s => s.userDTO.id === details.id) : shifts;
