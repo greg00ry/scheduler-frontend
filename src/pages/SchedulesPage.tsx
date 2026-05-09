@@ -30,20 +30,46 @@ function ShiftsPanel({ scheduleId }: { scheduleId: number }) {
   if (isLoading) return <p className="text-sm text-gray-400 p-4">Ładowanie zmian...</p>;
   if (shifts.length === 0) return <p className="text-sm text-gray-400 p-4">Brak zmian w tym grafiku</p>;
 
+  const byDay = shifts.reduce<Record<string, typeof shifts>>((acc, shift) => {
+    const key = shift.date.slice(0, 10);
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(shift);
+    return acc;
+  }, {});
+
+  const sortedDays = Object.keys(byDay).sort();
+
   return (
-    <div className="divide-y divide-gray-100">
-      {shifts.map(shift => (
-        <div key={shift.id} className="px-6 py-3 flex items-center justify-between hover:bg-gray-50">
-          <div>
-            <p className="text-sm font-medium text-gray-900">{shift.userDTO.firstName} {shift.userDTO.lastName}</p>
-            <p className="text-xs text-gray-500">{format(parseISO(shift.date), 'EEEE, d MMM', { locale: pl })}</p>
+    <div className="grid grid-cols-7 gap-px bg-gray-200">
+      {sortedDays.map(dateKey => {
+        const dayShifts = byDay[dateKey];
+        const date = parseISO(dateKey);
+        const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+
+        return (
+          <div key={dateKey} className={`p-3 ${isWeekend ? 'bg-gray-50' : 'bg-white'}`}>
+            <div className="mb-2 text-center">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                {format(date, 'EEE', { locale: pl })}
+              </p>
+              <p className="text-base font-bold text-gray-800">{format(date, 'd')}</p>
+            </div>
+            <div className="space-y-1.5">
+              {dayShifts.map(shift => (
+                <div key={shift.id} className="bg-blue-50 border border-blue-100 rounded-lg px-2 py-1.5">
+                  <p className="text-xs font-medium text-blue-800 truncate">
+                    {shift.userDTO.firstName} {shift.userDTO.lastName[0]}.
+                  </p>
+                  <p className="text-xs text-blue-500 flex items-center gap-0.5 mt-0.5">
+                    <Clock size={10} />
+                    {format(parseISO(shift.startTime), 'HH:mm')}–{format(parseISO(shift.endTime), 'HH:mm')}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="flex items-center gap-1 text-xs text-gray-500">
-            <Clock size={13} />
-            {format(parseISO(shift.startTime), 'HH:mm')} – {format(parseISO(shift.endTime), 'HH:mm')}
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -73,19 +99,18 @@ function AddShiftForm({ users, onAdd, onCancel }: {
         <option value={0}>-- pracownik --</option>
         {users.map(u => <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>)}
       </select>
-      <div className="flex gap-1 items-center">
+      <div className="space-y-1">
         <input
           type="time"
           value={startTime}
           onChange={e => setStartTime(e.target.value)}
-          className="flex-1 border border-gray-300 rounded px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full border border-gray-300 rounded px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
-        <span className="text-xs text-gray-400">–</span>
         <input
           type="time"
           value={endTime}
           onChange={e => setEndTime(e.target.value)}
-          className="flex-1 border border-gray-300 rounded px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full border border-gray-300 rounded px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
       <div className="flex gap-1">
