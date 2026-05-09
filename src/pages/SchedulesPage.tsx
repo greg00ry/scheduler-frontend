@@ -164,18 +164,17 @@ export default function SchedulesPage() {
       const dayDate = addDays(currentWeek, Number(dayIdx));
       const dateStr = format(dayDate, 'yyyy-MM-dd');
       return rows.map(row => ({
-        userId: row.userId,
-        scheduleId: 0,
-        date: `${dateStr}T00:00:00.000Z`,
-        startTime: `${dateStr}T${row.startTime}:00.000Z`,
-        endTime: `${dateStr}T${row.endTime}:00.000Z`,
+        userId: Number(row.userId),
+        date: `${dateStr}T00:00:00`,
+        startTime: `${dateStr}T${row.startTime}:00`,
+        endTime: `${dateStr}T${row.endTime}:00`,
       }));
     });
 
     createMutation.mutate({
-      weekStart: format(currentWeek, "yyyy-MM-dd'T'00:00:00.000'Z'"),
-      weekEnd: format(we, "yyyy-MM-dd'T'23:59:59.000'Z'"),
-      createdBy_id: createdById,
+      weekStart: format(currentWeek, "yyyy-MM-dd'T'00:00:00"),
+      weekEnd: format(we, "yyyy-MM-dd'T'23:59:59"),
+      createdBy_id: Number(createdById),
       shifts,
     });
   };

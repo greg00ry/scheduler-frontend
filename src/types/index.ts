@@ -56,7 +56,7 @@ export interface ShiftDTO {
 
 export interface CreateShiftDTO {
   userId: number;
-  scheduleId: number;
+  scheduleId?: number;
   date: string;
   startTime: string;
   endTime: string;
