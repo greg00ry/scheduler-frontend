@@ -7,9 +7,13 @@ import type { CreateScheduleDTO } from '../types';
 import type { UserDTO } from '../types';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
-import { format, parseISO, startOfWeek, addDays, addWeeks, subWeeks, isBefore } from 'date-fns';
+import {
+  format, parseISO, startOfWeek, startOfMonth, endOfMonth,
+  addDays, addWeeks, subWeeks, addMonths, subMonths,
+  eachDayOfInterval, isBefore, getDay,
+} from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { Plus, ChevronRight, X, Clock, ChevronLeft, ChevronRight as ChevronRightIcon, Check } from 'lucide-react';
+import { Plus, ChevronRight, X, Clock, ChevronLeft, ChevronRight as ChevronRightIcon, Check, CalendarDays } from 'lucide-react';
 
 const DAY_LABELS = ['Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob', 'Niedz'];
 
@@ -20,7 +24,8 @@ interface ShiftRow {
   endTime: string;
 }
 
-type WeekGrid = Record<number, ShiftRow[]>; // 0=Mon … 6=Sun
+type Grid = Record<string, ShiftRow[]>; // keyed by 'yyyy-MM-dd'
+type ViewMode = 'weekly' | 'monthly';
 
 function ShiftsPanel({ scheduleId }: { scheduleId: number }) {
   const navigate = useNavigate();
@@ -47,7 +52,6 @@ function ShiftsPanel({ scheduleId }: { scheduleId: number }) {
         const dayShifts = byDay[dateKey];
         const date = parseISO(dateKey);
         const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-
         return (
           <div key={dateKey} className={`p-3 ${isWeekend ? 'bg-gray-50' : 'bg-white'}`}>
             <div className="mb-2 text-center">
@@ -61,7 +65,7 @@ function ShiftsPanel({ scheduleId }: { scheduleId: number }) {
                 <button
                   key={shift.id}
                   onClick={() => navigate('/shifts', { state: { userId: shift.userDTO.id, date: shift.date.slice(0, 10) } })}
-                  className="w-full text-left bg-blue-50 border border-blue-100 rounded-lg px-2 py-1.5 hover:bg-blue-100 hover:border-blue-300 transition-colors cursor-pointer"
+                  className="w-full text-left bg-blue-50 border border-blue-100 rounded-lg px-2 py-1.5 hover:bg-blue-100 hover:border-blue-300 transition-colors"
                 >
                   <p className="text-xs font-medium text-blue-800 truncate">
                     {shift.userDTO.firstName} {shift.userDTO.lastName[0]}.
@@ -96,43 +100,82 @@ function AddShiftForm({ users, onAdd, onCancel }: {
   };
 
   return (
-    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-2 space-y-2">
+    <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 mt-1 space-y-1.5">
       <select
         value={userId}
         onChange={e => setUserId(Number(e.target.value))}
-        className="w-full border border-gray-300 rounded px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
       >
         <option value={0}>-- pracownik --</option>
         {users.map(u => <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>)}
       </select>
-      <div className="space-y-1">
-        <input
-          type="time"
-          value={startTime}
-          onChange={e => setStartTime(e.target.value)}
-          className="w-full border border-gray-300 rounded px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <input
-          type="time"
-          value={endTime}
-          onChange={e => setEndTime(e.target.value)}
-          className="w-full border border-gray-300 rounded px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
+      <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)}
+        className="w-full border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500" />
+      <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)}
+        className="w-full border border-gray-300 rounded px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-500" />
       <div className="flex gap-1">
-        <button
-          onClick={handleAdd}
-          className="flex-1 flex items-center justify-center gap-1 bg-blue-600 text-white text-xs py-1.5 rounded hover:bg-blue-700"
-        >
-          <Check size={12} /> Dodaj
+        <button onClick={handleAdd}
+          className="flex-1 flex items-center justify-center gap-1 bg-blue-600 text-white text-xs py-1 rounded hover:bg-blue-700">
+          <Check size={11} /> Dodaj
         </button>
-        <button
-          onClick={onCancel}
-          className="px-3 text-xs text-gray-500 hover:bg-gray-200 rounded"
-        >
-          <X size={12} />
+        <button onClick={onCancel} className="px-2 text-xs text-gray-500 hover:bg-gray-200 rounded">
+          <X size={11} />
         </button>
       </div>
+    </div>
+  );
+}
+
+function DayCell({ dateStr, day, shifts, users, isAdding, isOutside, onAdd, onRemove, onStartAdd, onCancelAdd }: {
+  dateStr: string;
+  day: Date;
+  shifts: ShiftRow[];
+  users: UserDTO[];
+  isAdding: boolean;
+  isOutside?: boolean;
+  onAdd: (row: Omit<ShiftRow, 'tempId'>) => void;
+  onRemove: (tempId: string) => void;
+  onStartAdd: () => void;
+  onCancelAdd: () => void;
+}) {
+  const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+  return (
+    <div className={`rounded-lg border p-1.5 min-h-24 flex flex-col ${
+      isOutside ? 'bg-gray-50 border-gray-100 opacity-40' :
+      isWeekend ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-200'
+    }`}>
+      <p className={`text-xs font-bold mb-1 ${isWeekend ? 'text-gray-400' : 'text-gray-700'}`}>
+        {format(day, 'd')}
+      </p>
+      <div className="space-y-0.5 flex-1">
+        {shifts.map(shift => {
+          const emp = users.find(u => u.id === shift.userId);
+          return (
+            <div key={shift.tempId} className="bg-blue-100 border border-blue-200 rounded px-1.5 py-0.5 flex items-start justify-between group">
+              <div>
+                <p className="text-xs font-medium text-blue-800 leading-tight truncate max-w-[5rem]">
+                  {emp ? `${emp.firstName[0]}. ${emp.lastName}` : `#${shift.userId}`}
+                </p>
+                <p className="text-xs text-blue-500">{shift.startTime}–{shift.endTime}</p>
+              </div>
+              <button onClick={() => onRemove(shift.tempId)}
+                className="opacity-0 group-hover:opacity-100 text-blue-300 hover:text-red-500 ml-0.5">
+                <X size={10} />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      {isAdding ? (
+        <AddShiftForm users={users} onAdd={onAdd} onCancel={onCancelAdd} />
+      ) : (
+        !isOutside && (
+          <button onClick={onStartAdd}
+            className="mt-1 w-full text-xs text-blue-500 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded py-1 flex items-center justify-center gap-0.5 transition-colors font-medium">
+            <Plus size={11} /> Dodaj
+          </button>
+        )
+      )}
     </div>
   );
 }
@@ -145,15 +188,24 @@ export default function SchedulesPage() {
 
   const [expanded, setExpanded] = useState<number | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('weekly');
 
   const [currentWeek, setCurrentWeek] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
-  const [grid, setGrid] = useState<WeekGrid>({});
-  const thisWeek = startOfWeek(new Date(), { weekStartsOn: 1 });
-  const [addingInDay, setAddingInDay] = useState<number | null>(null);
+  const [currentMonth, setCurrentMonth] = useState<Date>(() => startOfMonth(new Date()));
+  const [grid, setGrid] = useState<Grid>({});
+  const [addingInDay, setAddingInDay] = useState<string | null>(null);
 
   const isManager = user?.role === 'MANAGER' || user?.role === 'ADMIN';
+  const thisWeek = startOfWeek(new Date(), { weekStartsOn: 1 });
+  const thisMonth = startOfMonth(new Date());
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(currentWeek, i));
+
+  // Monthly calendar grid
+  const monthStart = startOfMonth(currentMonth);
+  const monthEnd = endOfMonth(currentMonth);
+  const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
+  const startPadding = (getDay(monthStart) + 6) % 7; // Mon=0
 
   const createMutation = useMutation({
     mutationFn: (data: CreateScheduleDTO) => createSchedule(data),
@@ -169,19 +221,13 @@ export default function SchedulesPage() {
     },
   });
 
-  const addShift = (dayIndex: number, row: Omit<ShiftRow, 'tempId'>) => {
-    setGrid(prev => ({
-      ...prev,
-      [dayIndex]: [...(prev[dayIndex] ?? []), { ...row, tempId: crypto.randomUUID() }],
-    }));
+  const addShift = (dateStr: string, row: Omit<ShiftRow, 'tempId'>) => {
+    setGrid(prev => ({ ...prev, [dateStr]: [...(prev[dateStr] ?? []), { ...row, tempId: crypto.randomUUID() }] }));
     setAddingInDay(null);
   };
 
-  const removeShift = (dayIndex: number, tempId: string) => {
-    setGrid(prev => ({
-      ...prev,
-      [dayIndex]: prev[dayIndex]?.filter(s => s.tempId !== tempId) ?? [],
-    }));
+  const removeShift = (dateStr: string, tempId: string) => {
+    setGrid(prev => ({ ...prev, [dateStr]: prev[dateStr]?.filter(s => s.tempId !== tempId) ?? [] }));
   };
 
   const totalShifts = Object.values(grid).flat().length;
@@ -190,21 +236,21 @@ export default function SchedulesPage() {
     if (!user?.id) { toast.error('Brak danych użytkownika'); return; }
     if (totalShifts === 0) { toast.error('Dodaj co najmniej jedną zmianę'); return; }
 
-    const we = addDays(currentWeek, 6);
-    const shifts = Object.entries(grid).flatMap(([dayIdx, rows]) => {
-      const dayDate = addDays(currentWeek, Number(dayIdx));
-      const dateStr = format(dayDate, 'yyyy-MM-dd');
-      return rows.map(row => ({
+    const rangeStart = viewMode === 'weekly' ? currentWeek : monthStart;
+    const rangeEnd = viewMode === 'weekly' ? addDays(currentWeek, 6) : monthEnd;
+
+    const shifts = Object.entries(grid).flatMap(([dateStr, rows]) =>
+      rows.map(row => ({
         userId: Number(row.userId),
         date: `${dateStr}T00:00:00`,
         startTime: `${dateStr}T${row.startTime}:00`,
         endTime: `${dateStr}T${row.endTime}:00`,
-      }));
-    });
+      }))
+    );
 
     createMutation.mutate({
-      weekStart: format(currentWeek, "yyyy-MM-dd'T'00:00:00"),
-      weekEnd: format(we, "yyyy-MM-dd'T'23:59:59"),
+      weekStart: format(rangeStart, "yyyy-MM-dd'T'00:00:00"),
+      weekEnd: format(rangeEnd, "yyyy-MM-dd'T'23:59:59"),
       createdBy_id: user.id,
       shifts,
     });
@@ -212,7 +258,9 @@ export default function SchedulesPage() {
 
   const openCreate = () => {
     setGrid({});
+    setAddingInDay(null);
     setCurrentWeek(startOfWeek(new Date(), { weekStartsOn: 1 }));
+    setCurrentMonth(startOfMonth(new Date()));
     setShowCreate(true);
   };
 
@@ -221,13 +269,11 @@ export default function SchedulesPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Grafiki</h2>
-          <p className="text-gray-500 mt-1">Tygodniowe harmonogramy pracy</p>
+          <p className="text-gray-500 mt-1">Harmonogramy pracy</p>
         </div>
         {isManager && !showCreate && (
-          <button
-            onClick={openCreate}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
-          >
+          <button onClick={openCreate}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">
             <Plus size={16} /> Nowy grafik
           </button>
         )}
@@ -237,107 +283,157 @@ export default function SchedulesPage() {
         <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6">
           {/* Header */}
           <div className="flex items-center justify-between mb-5">
-            <h3 className="font-semibold text-gray-900 text-lg">Nowy grafik</h3>
+            <div className="flex items-center gap-4">
+              <h3 className="font-semibold text-gray-900 text-lg">Nowy grafik</h3>
+              {/* View mode toggle */}
+              <div className="flex bg-gray-100 rounded-lg p-0.5 text-sm">
+                <button
+                  onClick={() => { setViewMode('weekly'); setGrid({}); setAddingInDay(null); }}
+                  className={`px-3 py-1 rounded-md font-medium transition-colors ${viewMode === 'weekly' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  Tygodniowy
+                </button>
+                <button
+                  onClick={() => { setViewMode('monthly'); setGrid({}); setAddingInDay(null); }}
+                  className={`px-3 py-1 rounded-md font-medium transition-colors ${viewMode === 'monthly' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  Miesięczny
+                </button>
+              </div>
+            </div>
             <button onClick={() => setShowCreate(false)}>
               <X size={18} className="text-gray-400 hover:text-gray-600" />
             </button>
           </div>
 
-          {/* Week selector */}
-          <div className="flex items-center gap-2 mb-5">
-            <button
-              onClick={() => setCurrentWeek(w => subWeeks(w, 1))}
-              disabled={user?.role !== 'ADMIN' && !isBefore(thisWeek, currentWeek)}
-              className="p-1.5 hover:bg-gray-100 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <ChevronLeft size={16} className="text-gray-500" />
-            </button>
-            <span className="text-sm font-medium text-gray-800 min-w-48 text-center">
-              {format(currentWeek, 'd MMM', { locale: pl })} – {format(addDays(currentWeek, 6), 'd MMM yyyy', { locale: pl })}
-            </span>
-            <button
-              onClick={() => setCurrentWeek(w => addWeeks(w, 1))}
-              className="p-1.5 hover:bg-gray-100 rounded-lg"
-            >
-              <ChevronRightIcon size={16} className="text-gray-500" />
-            </button>
-          </div>
+          {/* Navigation */}
+          {viewMode === 'weekly' ? (
+            <div className="flex items-center gap-2 mb-5">
+              <button
+                onClick={() => setCurrentWeek(w => subWeeks(w, 1))}
+                disabled={user?.role !== 'ADMIN' && !isBefore(thisWeek, currentWeek)}
+                className="p-1.5 hover:bg-gray-100 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft size={16} className="text-gray-500" />
+              </button>
+              <span className="text-sm font-medium text-gray-800 min-w-48 text-center">
+                {format(currentWeek, 'd MMM', { locale: pl })} – {format(addDays(currentWeek, 6), 'd MMM yyyy', { locale: pl })}
+              </span>
+              <button onClick={() => setCurrentWeek(w => addWeeks(w, 1))} className="p-1.5 hover:bg-gray-100 rounded-lg">
+                <ChevronRightIcon size={16} className="text-gray-500" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 mb-5">
+              <button
+                onClick={() => { setCurrentMonth(m => subMonths(m, 1)); setGrid({}); setAddingInDay(null); }}
+                disabled={user?.role !== 'ADMIN' && !isBefore(thisMonth, currentMonth)}
+                className="p-1.5 hover:bg-gray-100 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft size={16} className="text-gray-500" />
+              </button>
+              <span className="text-sm font-medium text-gray-800 min-w-48 text-center capitalize">
+                {format(currentMonth, 'LLLL yyyy', { locale: pl })}
+              </span>
+              <button onClick={() => { setCurrentMonth(m => addMonths(m, 1)); setGrid({}); setAddingInDay(null); }} className="p-1.5 hover:bg-gray-100 rounded-lg">
+                <ChevronRightIcon size={16} className="text-gray-500" />
+              </button>
+            </div>
+          )}
 
           {/* Weekly grid */}
-          <div className="grid grid-cols-7 gap-2 mb-5">
-            {weekDays.map((day, dayIdx) => {
-              const dayShifts = grid[dayIdx] ?? [];
-              const isAdding = addingInDay === dayIdx;
-              const isWeekend = dayIdx >= 5;
-
-              return (
-                <div
-                  key={dayIdx}
-                  className={`rounded-xl border ${isWeekend ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-200'} p-2 min-h-32`}
-                >
-                  <div className="mb-2 text-center">
-                    <p className={`text-xs font-semibold uppercase tracking-wide ${isWeekend ? 'text-gray-400' : 'text-gray-600'}`}>
-                      {DAY_LABELS[dayIdx]}
-                    </p>
-                    <p className="text-lg font-bold text-gray-800 leading-none mt-0.5">
-                      {format(day, 'd')}
-                    </p>
-                  </div>
-
-                  <div className="space-y-1">
-                    {dayShifts.map(shift => {
-                      const emp = users.find(u => u.id === shift.userId);
-                      return (
-                        <div
-                          key={shift.tempId}
-                          className="bg-blue-100 border border-blue-200 rounded-lg px-2 py-1 flex items-start justify-between group"
-                        >
-                          <div>
-                            <p className="text-xs font-medium text-blue-800 leading-tight">
-                              {emp ? `${emp.firstName} ${emp.lastName[0]}.` : `#${shift.userId}`}
-                            </p>
-                            <p className="text-xs text-blue-600">{shift.startTime}–{shift.endTime}</p>
+          {viewMode === 'weekly' && (
+            <div className="grid grid-cols-7 gap-2 mb-5">
+              {weekDays.map((day) => {
+                const dateStr = format(day, 'yyyy-MM-dd');
+                const dayShifts = grid[dateStr] ?? [];
+                const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+                const dayLabel = DAY_LABELS[(day.getDay() + 6) % 7];
+                return (
+                  <div key={dateStr} className={`rounded-xl border ${isWeekend ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-200'} p-2 min-h-32`}>
+                    <div className="mb-2 text-center">
+                      <p className={`text-xs font-semibold uppercase tracking-wide ${isWeekend ? 'text-gray-400' : 'text-gray-600'}`}>{dayLabel}</p>
+                      <p className="text-lg font-bold text-gray-800 leading-none mt-0.5">{format(day, 'd')}</p>
+                    </div>
+                    <div className="space-y-1">
+                      {dayShifts.map(shift => {
+                        const emp = users.find(u => u.id === shift.userId);
+                        return (
+                          <div key={shift.tempId} className="bg-blue-100 border border-blue-200 rounded-lg px-2 py-1 flex items-start justify-between group">
+                            <div>
+                              <p className="text-xs font-medium text-blue-800 leading-tight">
+                                {emp ? `${emp.firstName} ${emp.lastName[0]}.` : `#${shift.userId}`}
+                              </p>
+                              <p className="text-xs text-blue-600">{shift.startTime}–{shift.endTime}</p>
+                            </div>
+                            <button onClick={() => removeShift(dateStr, shift.tempId)}
+                              className="opacity-0 group-hover:opacity-100 text-blue-400 hover:text-red-500 ml-1 mt-0.5">
+                              <X size={11} />
+                            </button>
                           </div>
-                          <button
-                            onClick={() => removeShift(dayIdx, shift.tempId)}
-                            className="opacity-0 group-hover:opacity-100 text-blue-400 hover:text-red-500 ml-1 mt-0.5"
-                          >
-                            <X size={11} />
-                          </button>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
+                    {addingInDay === dateStr ? (
+                      <AddShiftForm users={users} onAdd={row => addShift(dateStr, row)} onCancel={() => setAddingInDay(null)} />
+                    ) : (
+                      <button onClick={() => setAddingInDay(dateStr)}
+                        className="mt-1 w-full text-xs text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg py-1 flex items-center justify-center gap-0.5 transition-colors">
+                        <Plus size={12} /> dodaj
+                      </button>
+                    )}
                   </div>
+                );
+              })}
+            </div>
+          )}
 
-                  {isAdding ? (
-                    <AddShiftForm
+          {/* Monthly grid */}
+          {viewMode === 'monthly' && (
+            <div className="mb-5">
+              <div className="grid grid-cols-7 gap-1 mb-1">
+                {DAY_LABELS.map(l => (
+                  <p key={l} className="text-xs font-semibold text-center text-gray-400 uppercase tracking-wide py-1">{l}</p>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 gap-1">
+                {Array.from({ length: startPadding }).map((_, i) => (
+                  <div key={`pad-${i}`} className="min-h-24 rounded-lg border border-gray-100 bg-gray-50 opacity-30" />
+                ))}
+                {monthDays.map(day => {
+                  const dateStr = format(day, 'yyyy-MM-dd');
+                  return (
+                    <DayCell
+                      key={dateStr}
+                      dateStr={dateStr}
+                      day={day}
+                      shifts={grid[dateStr] ?? []}
                       users={users}
-                      onAdd={row => addShift(dayIdx, row)}
-                      onCancel={() => setAddingInDay(null)}
+                      isAdding={addingInDay === dateStr}
+                      onAdd={row => addShift(dateStr, row)}
+                      onRemove={tempId => removeShift(dateStr, tempId)}
+                      onStartAdd={() => setAddingInDay(dateStr)}
+                      onCancelAdd={() => setAddingInDay(null)}
                     />
-                  ) : (
-                    <button
-                      onClick={() => { setAddingInDay(dayIdx); }}
-                      className="mt-1 w-full text-xs text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg py-1 flex items-center justify-center gap-0.5 transition-colors"
-                    >
-                      <Plus size={12} /> dodaj
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Footer */}
           <div className="flex items-center justify-between border-t border-gray-100 pt-4">
-            <p className="text-sm text-gray-500">
-              Łącznie zmian: <span className="font-semibold text-gray-800">{totalShifts}</span>
-            </p>
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <CalendarDays size={15} className="text-gray-400" />
+              {viewMode === 'weekly'
+                ? `${format(currentWeek, 'd MMM', { locale: pl })} – ${format(addDays(currentWeek, 6), 'd MMM yyyy', { locale: pl })}`
+                : <span className="capitalize">{format(currentMonth, 'LLLL yyyy', { locale: pl })}</span>
+              }
+              <span className="text-gray-300">·</span>
+              Zmian: <span className="font-semibold text-gray-800">{totalShifts}</span>
+            </div>
             <div className="flex gap-2">
-              <button
-                onClick={() => setShowCreate(false)}
-                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
-              >
+              <button onClick={() => setShowCreate(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">
                 Anuluj
               </button>
               <button
