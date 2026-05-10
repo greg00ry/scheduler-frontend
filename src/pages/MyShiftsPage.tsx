@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useLocation } from 'react-router-dom';
 import { getAllShifts } from '../api/schedules';
 import { getAll } from '../api/users';
 import { createAbsence } from '../api/absences';
@@ -13,10 +14,14 @@ import { Clock, AlertCircle, X, User } from 'lucide-react';
 export default function MyShiftsPage() {
   const qc = useQueryClient();
   const { user } = useAuth();
+  const location = useLocation();
+  const navState = location.state as { userId?: number; date?: string } | null;
+
   const isManager = user?.role === 'MANAGER' || user?.role === 'ADMIN';
   const { data: allShifts = [] } = useQuery({ queryKey: ['all-shifts'], queryFn: getAllShifts });
   const { data: users = [] } = useQuery({ queryKey: ['users'], queryFn: getAll, enabled: isManager });
-  const [selectedUserId, setSelectedUserId] = useState<number>(0);
+  const [selectedUserId, setSelectedUserId] = useState<number>(navState?.userId ?? 0);
+  const highlightDate = navState?.date ?? null;
   const [modal, setModal] = useState<{ shiftId: number; userId: number; shiftLabel: string } | null>(null);
   const [reason, setReason] = useState('');
 
@@ -49,8 +54,10 @@ export default function MyShiftsPage() {
     });
   };
 
-  const ShiftCard = ({ shift }: { shift: typeof allShifts[0] }) => (
-    <div className="bg-white border border-gray-200 rounded-xl p-5">
+  const ShiftCard = ({ shift }: { shift: typeof allShifts[0] }) => {
+    const isHighlighted = highlightDate === shift.date.slice(0, 10);
+    return (
+    <div className={`border rounded-xl p-5 transition-colors ${isHighlighted ? 'bg-blue-50 border-blue-400 shadow-sm' : 'bg-white border-gray-200'}`}>
       <div className="flex items-start justify-between">
         <div>
           {!selectedUserId && (
@@ -84,7 +91,8 @@ export default function MyShiftsPage() {
         )}
       </div>
     </div>
-  );
+    );
+  };
 
   return (
     <div>

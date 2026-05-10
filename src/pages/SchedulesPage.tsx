@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import type { CreateScheduleDTO } from '../types';
 import type { UserDTO } from '../types';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 import { format, parseISO, startOfWeek, addDays, addWeeks, subWeeks, isBefore } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { Plus, ChevronRight, X, Clock, ChevronLeft, ChevronRight as ChevronRightIcon, Check } from 'lucide-react';
@@ -22,6 +23,7 @@ interface ShiftRow {
 type WeekGrid = Record<number, ShiftRow[]>; // 0=Mon … 6=Sun
 
 function ShiftsPanel({ scheduleId }: { scheduleId: number }) {
+  const navigate = useNavigate();
   const { data: shifts = [], isLoading } = useQuery({
     queryKey: ['schedule-shifts', scheduleId],
     queryFn: () => getShiftsBySchedule(scheduleId),
@@ -56,7 +58,11 @@ function ShiftsPanel({ scheduleId }: { scheduleId: number }) {
             </div>
             <div className="space-y-1.5">
               {dayShifts.map(shift => (
-                <div key={shift.id} className="bg-blue-50 border border-blue-100 rounded-lg px-2 py-1.5">
+                <button
+                  key={shift.id}
+                  onClick={() => navigate('/shifts', { state: { userId: shift.userDTO.id, date: shift.date.slice(0, 10) } })}
+                  className="w-full text-left bg-blue-50 border border-blue-100 rounded-lg px-2 py-1.5 hover:bg-blue-100 hover:border-blue-300 transition-colors cursor-pointer"
+                >
                   <p className="text-xs font-medium text-blue-800 truncate">
                     {shift.userDTO.firstName} {shift.userDTO.lastName[0]}.
                   </p>
@@ -64,7 +70,7 @@ function ShiftsPanel({ scheduleId }: { scheduleId: number }) {
                     <Clock size={10} />
                     {format(parseISO(shift.startTime), 'HH:mm')}–{format(parseISO(shift.endTime), 'HH:mm')}
                   </p>
-                </div>
+                </button>
               ))}
             </div>
           </div>

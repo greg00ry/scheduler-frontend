@@ -16,10 +16,11 @@ export default function AvailabilityPage() {
   const { data: details } = useQuery({ queryKey: ['user-details'], queryFn: getDetails, retry: false, enabled: import.meta.env.VITE_SKIP_AUTH !== 'true' });
   const [selectedUserId, setSelectedUserId] = useState<number>(0);
 
+  const [currentWeek, setCurrentWeek] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
+
   useEffect(() => {
     if (details?.id && !selectedUserId) setSelectedUserId(details.id);
   }, [details]);
-  const [currentWeek, setCurrentWeek] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [availability, setAvailability] = useState<Map<string, boolean>>(new Map());
   const [saved, setSaved] = useState<Map<string, DaySaved>>(new Map());
   const [modal, setModal] = useState<ModalState | null>(null);
