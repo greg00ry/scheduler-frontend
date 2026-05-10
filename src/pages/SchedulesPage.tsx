@@ -126,8 +126,7 @@ function AddShiftForm({ users, onAdd, onCancel }: {
   );
 }
 
-function DayCell({ dateStr, day, shifts, users, isAdding, isOutside, onAdd, onRemove, onStartAdd, onCancelAdd }: {
-  dateStr: string;
+function DayCell({ day, shifts, users, isAdding, isOutside, onAdd, onRemove, onStartAdd, onCancelAdd }: {
   day: Date;
   shifts: ShiftRow[];
   users: UserDTO[];
@@ -405,7 +404,6 @@ export default function SchedulesPage() {
                   return (
                     <DayCell
                       key={dateStr}
-                      dateStr={dateStr}
                       day={day}
                       shifts={grid[dateStr] ?? []}
                       users={users}

@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { createAvailability } from '../api/availability';
-import { getAll, getDetails } from '../api/users';
+import { getAll } from '../api/users';
+import { useAuth } from '../context/AuthContext';
 import type { CreateAvailabilityDTO } from '../types';
 import toast from 'react-hot-toast';
 import { format, addDays, startOfWeek, addWeeks, subWeeks } from 'date-fns';
@@ -12,15 +13,11 @@ interface DaySaved { available: boolean; startTime?: string; endTime?: string; }
 interface ModalState { date: Date; available: boolean; startTime: string; endTime: string; }
 
 export default function AvailabilityPage() {
+  const { user } = useAuth();
   const { data: users = [] } = useQuery({ queryKey: ['users'], queryFn: getAll });
-  const { data: details } = useQuery({ queryKey: ['user-details'], queryFn: getDetails, retry: false, enabled: import.meta.env.VITE_SKIP_AUTH !== 'true' });
-  const [selectedUserId, setSelectedUserId] = useState<number>(0);
+  const [selectedUserId, setSelectedUserId] = useState<number>(user?.id ?? 0);
 
   const [currentWeek, setCurrentWeek] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
-
-  useEffect(() => {
-    if (details?.id && !selectedUserId) setSelectedUserId(details.id);
-  }, [details]);
   const [availability, setAvailability] = useState<Map<string, boolean>>(new Map());
   const [saved, setSaved] = useState<Map<string, DaySaved>>(new Map());
   const [modal, setModal] = useState<ModalState | null>(null);
@@ -29,7 +26,7 @@ export default function AvailabilityPage() {
 
   const mutation = useMutation({
     mutationFn: (data: CreateAvailabilityDTO) => createAvailability(data),
-    onSuccess: (_, vars) => {
+    onSuccess: () => {
       toast.success('Dostępność zapisana');
     },
     onError: () => toast.error('Błąd podczas zapisywania'),
