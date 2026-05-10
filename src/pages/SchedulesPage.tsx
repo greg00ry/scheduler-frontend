@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import type { CreateScheduleDTO } from '../types';
 import type { UserDTO } from '../types';
 import toast from 'react-hot-toast';
-import { format, parseISO, startOfWeek, addDays, addWeeks, subWeeks } from 'date-fns';
+import { format, parseISO, startOfWeek, addDays, addWeeks, subWeeks, isBefore } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { Plus, ChevronRight, X, Clock, ChevronLeft, ChevronRight as ChevronRightIcon, Check } from 'lucide-react';
 
@@ -141,8 +141,8 @@ export default function SchedulesPage() {
   const [showCreate, setShowCreate] = useState(false);
 
   const [currentWeek, setCurrentWeek] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
-  const [createdById, setCreatedById] = useState<number>(0);
   const [grid, setGrid] = useState<WeekGrid>({});
+  const thisWeek = startOfWeek(new Date(), { weekStartsOn: 1 });
   const [addingInDay, setAddingInDay] = useState<number | null>(null);
 
   const isManager = user?.role === 'MANAGER' || user?.role === 'ADMIN';
@@ -181,7 +181,7 @@ export default function SchedulesPage() {
   const totalShifts = Object.values(grid).flat().length;
 
   const handleCreate = () => {
-    if (!createdById) { toast.error('Wybierz osobę tworzącą grafik'); return; }
+    if (!user?.id) { toast.error('Brak danych użytkownika'); return; }
     if (totalShifts === 0) { toast.error('Dodaj co najmniej jedną zmianę'); return; }
 
     const we = addDays(currentWeek, 6);
@@ -199,14 +199,13 @@ export default function SchedulesPage() {
     createMutation.mutate({
       weekStart: format(currentWeek, "yyyy-MM-dd'T'00:00:00"),
       weekEnd: format(we, "yyyy-MM-dd'T'23:59:59"),
-      createdBy_id: Number(createdById),
+      createdBy_id: user.id,
       shifts,
     });
   };
 
   const openCreate = () => {
     setGrid({});
-    setCreatedById(0);
     setCurrentWeek(startOfWeek(new Date(), { weekStartsOn: 1 }));
     setShowCreate(true);
   };
@@ -238,37 +237,24 @@ export default function SchedulesPage() {
             </button>
           </div>
 
-          {/* Week selector + Creator */}
-          <div className="flex items-center gap-6 mb-5">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setCurrentWeek(w => subWeeks(w, 1))}
-                className="p-1.5 hover:bg-gray-100 rounded-lg"
-              >
-                <ChevronLeft size={16} className="text-gray-500" />
-              </button>
-              <span className="text-sm font-medium text-gray-800 min-w-48 text-center">
-                {format(currentWeek, 'd MMM', { locale: pl })} – {format(addDays(currentWeek, 6), 'd MMM yyyy', { locale: pl })}
-              </span>
-              <button
-                onClick={() => setCurrentWeek(w => addWeeks(w, 1))}
-                className="p-1.5 hover:bg-gray-100 rounded-lg"
-              >
-                <ChevronRightIcon size={16} className="text-gray-500" />
-              </button>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <label className="text-xs font-medium text-gray-500 whitespace-nowrap">Tworzący grafik:</label>
-              <select
-                value={createdById}
-                onChange={e => setCreatedById(Number(e.target.value))}
-                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value={0}>-- wybierz --</option>
-                {users.map(u => <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>)}
-              </select>
-            </div>
+          {/* Week selector */}
+          <div className="flex items-center gap-2 mb-5">
+            <button
+              onClick={() => setCurrentWeek(w => subWeeks(w, 1))}
+              disabled={user?.role !== 'ADMIN' && !isBefore(thisWeek, currentWeek)}
+              className="p-1.5 hover:bg-gray-100 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft size={16} className="text-gray-500" />
+            </button>
+            <span className="text-sm font-medium text-gray-800 min-w-48 text-center">
+              {format(currentWeek, 'd MMM', { locale: pl })} – {format(addDays(currentWeek, 6), 'd MMM yyyy', { locale: pl })}
+            </span>
+            <button
+              onClick={() => setCurrentWeek(w => addWeeks(w, 1))}
+              className="p-1.5 hover:bg-gray-100 rounded-lg"
+            >
+              <ChevronRightIcon size={16} className="text-gray-500" />
+            </button>
           </div>
 
           {/* Weekly grid */}
@@ -350,7 +336,7 @@ export default function SchedulesPage() {
               </button>
               <button
                 onClick={handleCreate}
-                disabled={createMutation.isPending || totalShifts === 0 || !createdById}
+                disabled={createMutation.isPending || totalShifts === 0}
                 className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {createMutation.isPending ? 'Tworzenie...' : 'Utwórz grafik'}

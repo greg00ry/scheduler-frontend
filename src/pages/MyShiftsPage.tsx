@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getAllShifts } from '../api/schedules';
-import { getAll, getDetails } from '../api/users';
+import { getAll } from '../api/users';
 import { createAbsence } from '../api/absences';
+import { useAuth } from '../context/AuthContext';
 import type { CreateAbsenceDTO } from '../types';
 import toast from 'react-hot-toast';
 import { format, parseISO, isFuture, isPast } from 'date-fns';
@@ -11,19 +12,17 @@ import { Clock, AlertCircle, X, User } from 'lucide-react';
 
 export default function MyShiftsPage() {
   const qc = useQueryClient();
+  const { user } = useAuth();
+  const isManager = user?.role === 'MANAGER' || user?.role === 'ADMIN';
   const { data: allShifts = [] } = useQuery({ queryKey: ['all-shifts'], queryFn: getAllShifts });
-  const { data: users = [] } = useQuery({ queryKey: ['users'], queryFn: getAll });
-  const { data: details } = useQuery({ queryKey: ['user-details'], queryFn: getDetails, retry: false, enabled: import.meta.env.VITE_SKIP_AUTH !== 'true' });
+  const { data: users = [] } = useQuery({ queryKey: ['users'], queryFn: getAll, enabled: isManager });
   const [selectedUserId, setSelectedUserId] = useState<number>(0);
-
-  useEffect(() => {
-    if (details?.id && !selectedUserId) setSelectedUserId(details.id);
-  }, [details]);
   const [modal, setModal] = useState<{ shiftId: number; userId: number; shiftLabel: string } | null>(null);
   const [reason, setReason] = useState('');
 
-  const filteredShifts = selectedUserId
-    ? allShifts.filter(s => s.userDTO.id === selectedUserId)
+  const effectiveUserId = isManager ? selectedUserId : (user?.id ?? 0);
+  const filteredShifts = effectiveUserId
+    ? allShifts.filter(s => s.userDTO.id === effectiveUserId)
     : allShifts;
 
   const upcoming = filteredShifts.filter(s => isFuture(parseISO(s.date)));
@@ -92,22 +91,24 @@ export default function MyShiftsPage() {
       <div className="flex items-start justify-between mb-6">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Zmiany</h2>
-          <p className="text-gray-500 mt-1">Harmonogram pracy pracowników</p>
+          <p className="text-gray-500 mt-1">{isManager ? 'Harmonogram pracy pracowników' : 'Twoje zmiany'}</p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <User size={16} className="text-gray-400" />
-          <select
-            value={selectedUserId}
-            onChange={e => { setSelectedUserId(Number(e.target.value)); setReportingShiftId(null); }}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-          >
-            <option value={0}>Wszyscy pracownicy</option>
-            {users.map(u => (
-              <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>
-            ))}
-          </select>
-        </div>
+        {isManager && (
+          <div className="flex items-center gap-2">
+            <User size={16} className="text-gray-400" />
+            <select
+              value={selectedUserId}
+              onChange={e => setSelectedUserId(Number(e.target.value))}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            >
+              <option value={0}>Wszyscy pracownicy</option>
+              {users.map(u => (
+                <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       <div className="mb-8">

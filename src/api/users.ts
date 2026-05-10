@@ -3,7 +3,7 @@ import type { UserDTO, UserDetailsDTO, CreateUserDTO, UpdateUserDTO, Role } from
 
 export const getAll = () => client.get<UserDTO[]>('/api/user/all').then(r => r.data);
 export const getById = (id: number) => client.get<UserDTO>(`/api/user/${id}`).then(r => r.data);
-export const getDetails = () => client.get<UserDetailsDTO>('/api/user/details').then(r => r.data);
+export const getDetails = (id: number) => client.get<UserDetailsDTO>('/api/user/details', { params: { id } }).then(r => r.data);
 export const getByRole = (role: Role) => client.get<UserDTO[]>('/api/user/by-role', { params: { role } }).then(r => r.data);
 export const getAvailableByDate = (date: string) => client.get<UserDTO[]>('/api/user/available', { params: { date } }).then(r => r.data);
 export const createUser = (data: CreateUserDTO) => client.post<UserDTO>('/api/user', data).then(r => r.data);

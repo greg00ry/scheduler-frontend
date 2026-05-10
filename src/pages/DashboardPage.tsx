@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { getAllShifts } from '../api/schedules';
 import { getDetails } from '../api/users';
+import { useAuth } from '../context/AuthContext';
 import { Clock, AlertCircle, Calendar, TrendingUp } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { pl } from 'date-fns/locale';
@@ -20,19 +21,25 @@ function StatCard({ label, value, icon: Icon, color }: { label: string; value: s
 }
 
 export default function DashboardPage() {
-  const { data: details } = useQuery({ queryKey: ['user-details'], queryFn: getDetails, retry: false, enabled: import.meta.env.VITE_SKIP_AUTH !== 'true' });
+  const { user } = useAuth();
   const { data: shifts = [] } = useQuery({ queryKey: ['all-shifts'], queryFn: getAllShifts });
+  const { data: details } = useQuery({
+    queryKey: ['user-details', user?.id],
+    queryFn: () => getDetails(user!.id!),
+    enabled: !!user?.id,
+    retry: false,
+  });
 
-  const myShifts = details ? shifts.filter(s => s.userDTO.id === details.id) : shifts;
+  const myShifts = user?.id ? shifts.filter(s => s.userDTO.id === user.id) : shifts;
   const upcoming = myShifts.filter(s => new Date(s.date) >= new Date()).slice(0, 10);
-  const totalHours = details?.workingHoursList.reduce((sum, w) => sum + w.totalHours, 0) ?? 0;
-  const overtimeHours = details?.workingHoursList.reduce((sum, w) => sum + w.overtimeHours, 0) ?? 0;
+  const totalHours = details?.workingHoursList?.reduce((sum, w) => sum + w.totalHours, 0) ?? 0;
+  const overtimeHours = details?.workingHoursList?.reduce((sum, w) => sum + w.overtimeHours, 0) ?? 0;
 
   return (
     <div>
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-gray-900">
-          Witaj{details ? `, ${details.firstName}` : ''}!
+          Witaj{details ? `, ${details.firstName}` : user ? `, ${user.email.split('@')[0]}` : ''}!
         </h2>
         <p className="text-gray-500 mt-1">Przegląd Twojego grafiku</p>
       </div>
@@ -40,7 +47,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard label="Łączne godziny" value={totalHours.toFixed(1)} icon={Clock} color="bg-blue-500" />
         <StatCard label="Nadgodziny" value={overtimeHours.toFixed(1)} icon={TrendingUp} color="bg-amber-500" />
-        <StatCard label="Nieobecności" value={details?.absences.length ?? 0} icon={AlertCircle} color="bg-red-500" />
+        <StatCard label="Nieobecności" value={details?.absences?.length ?? 0} icon={AlertCircle} color="bg-red-500" />
         <StatCard label="Nadchodzące zmiany" value={upcoming.length} icon={Calendar} color="bg-green-500" />
       </div>
 
@@ -70,7 +77,7 @@ export default function DashboardPage() {
 
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <h3 className="font-semibold text-gray-900 mb-4">Ostatnie nieobecności</h3>
-          {(details?.absences.length ?? 0) === 0 ? (
+          {(details?.absences?.length ?? 0) === 0 ? (
             <p className="text-gray-400 text-sm">Brak zarejestrowanych nieobecności</p>
           ) : (
             <div className="space-y-3">
